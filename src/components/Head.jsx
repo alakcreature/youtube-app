@@ -1,9 +1,40 @@
 import { useDispatch } from "react-redux";
-import { toggleMenu } from "../utils/appSlice";
+import { addSuggestions, toggleMenu } from "../utils/appSlice";
 import { useSelector } from "react-redux";
+import { useEffect, useRef, useState } from "react";
+import { cacheResult } from "../utils/searchSlice";
 
 function Head() {
   const dispatch = useDispatch();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const timer = useRef(null);
+  const { suggestions } = useSelector((state) => state.app);
+  const searchCache = useSelector((state) => state.search);
+
+  const fetchSuggestions = async () => {
+    const res = await fetch(
+      `http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${searchQuery}`
+    );
+    const data = await res.json();
+    dispatch(addSuggestions(data[1]));
+    dispatch(cacheResult({ [searchQuery]: data[1] }));
+  };
+
+  useEffect(() => {
+    if (searchQuery) {
+      if (!searchCache[searchQuery]) {
+        timer.current = setTimeout(() => {
+          fetchSuggestions();
+        }, 200);
+      } else {
+        dispatch(addSuggestions(searchCache[searchQuery]));
+      }
+    }
+    return () => {
+      clearTimeout(timer.current);
+    };
+  }, [searchQuery]);
 
   return (
     <div className="grid grid-flow-col p-3 m-2 shadow-lg">
@@ -28,10 +59,29 @@ function Head() {
         <input
           type="text"
           className="border border-gray-400 rounded-l-full px-3 py-1.5 w-1/2"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setShowSuggestions(false)}
         />
         <button className="border border-gray-400 rounded-r-full px-3 py-1.5 bg-gray-400">
           🔍
         </button>
+        {showSuggestions && suggestions?.length > 0 && (
+          <div className="fixed bg-white py-2 w-[37rem] shadow-lg rounded-lg ml-44">
+            <ul>
+              {suggestions.map((suggestion, index) => {
+                return (
+                  <li
+                    key={index}
+                    className="p-1.5 text-left border border-b-grey hover:bg-gray-100 cursor-pointer">
+                    🔍 {suggestion}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="col-span-1">
         <img
